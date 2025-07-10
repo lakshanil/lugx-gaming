@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: game-service
+  template:
+    metadata:
+      labels:
+        app: game-service
+    spec:
+      containers:
+      - name: game-service
+        image: gcr.io/lugx-gaming-project/game-service:v1
+        ports:
+        - containerPort: 3000  # Match  service port
+        env:
+        - name: DB_HOST
+          value: "postgres-service"  # Will link to PostgreSQL later

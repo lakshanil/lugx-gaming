@@ -1,0 +1,89 @@
+name: Deploy All Services
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - '**'  # Monitor all folders
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GKE_CLUSTER: lugx-cluster
+  GKE_ZONE: us-central1-a
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: gcr.io
+          username: _json_key
+          password: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GKE_ZONE }}
+          credentials: ${{ secrets.GCP_SA_KEY }}
+
+  deploy-frontend:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cd frontend
+          docker build -t gcr.io/$GCP_PROJECT_ID/frontend:${{ github.sha }} .
+          docker push gcr.io/$GCP_PROJECT_ID/frontend:${{ github.sha }}
+          kubectl set image deployment/frontend nginx=gcr.io/$GCP_PROJECT_ID/frontend:${{ github.sha }}
+
+  deploy-game-service:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cd game-service
+          docker build -t gcr.io/$GCP_PROJECT_ID/game-service:${{ github.sha }} .
+          docker push gcr.io/$GCP_PROJECT_ID/game-service:${{ github.sha }}
+          kubectl set image deployment/game-service game-service=gcr.io/$GCP_PROJECT_ID/game-service:${{ github.sha }}
+
+  deploy-order-service:
+    needs: [setup, deploy-game-service]  # Wait for game-service if they interact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cd order-service
+          npm install --production
+          docker build -t gcr.io/$GCP_PROJECT_ID/order-service:${{ github.sha }} .
+          docker push gcr.io/$GCP_PROJECT_ID/order-service:${{ github.sha }}
+          kubectl set image deployment/order-service order-service=gcr.io/$GCP_PROJECT_ID/order-service:${{ github.sha }}
+
+  deploy-analytics:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cd analytics-service
+          npm install
+          docker build -t gcr.io/$GCP_PROJECT_ID/analytics-service:${{ github.sha }} .
+          docker push gcr.io/$GCP_PROJECT_ID/analytics-service:${{ github.sha }}
+          kubectl set image deployment/analytics-service analytics-service=gcr.io/$GCP_PROJECT_ID/analytics-service:${{ github.sha }}
+
+  verify:
+    needs: [deploy-frontend, deploy-game-service, deploy-order-service, deploy-analytics]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GKE_ZONE }}
+          credentials: ${{ secrets.GCP_SA_KEY }}
+      - run: |
+          kubectl get pods -o wide
+          echo "Testing frontend..."
+          kubectl port-forward svc/frontend-service 8080:80 &
+          curl -I http://localhost:8080
