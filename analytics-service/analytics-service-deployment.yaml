@@ -13,21 +13,23 @@ spec:
         app: analytics-service
     spec:
       containers:
-      - name: analytics-service
-        image: gcr.io/lugx-gaming-project/analytics-service:v1
-        imagePullPolicy: Always
+      - name: analytics
+        image: gcr.io/lugx-gaming-project/analytics-service:v10
         ports:
         - containerPort: 4000
-        env:
-        - name: CLICKHOUSE_HOST
-          value: "clickhouse"
-        - name: CLICKHOUSE_PORT
-          value: "8125"
-        - name: CLICKHOUSE_USER
-          value: "default"
         resources:
           requests:
             memory: "256Mi"
             cpu: "100m"
-          limits:
-            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 5
+          periodSeconds: 10

@@ -1,18 +1,14 @@
-# Dockerfile
-FROM node:18
+FROM node:18-alpine
 
-# Create app directory
 WORKDIR /app
-
-# Copy package.json and install dependencies
 COPY package*.json ./
 RUN npm install
-
-# Copy your source code
 COPY . .
 
-# Expose the port your app runs on
 EXPOSE 4000
 
-# Start the service
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD curl -f http://localhost:4000/health || exit 1
+
+USER node
 CMD ["node", "server.js"]

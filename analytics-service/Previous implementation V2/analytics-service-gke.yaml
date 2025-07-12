@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+  labels:
+    app: analytics-service  # Added deployment-level labels
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-service  # Must match template labels
+  template:
+    metadata:
+      labels:
+        app: analytics-service  # Must match selector
+    spec:
+      containers:
+      - name: analytics-service
+        image: us-central1-docker.pkg.dev/YOUR_PROJECT_ID/analytics-repo/analytics-service:v1
+        ports:
+        - containerPort: 4000
+        env:
+        - name: CLICKHOUSE_HOST
+          value: "clickhouse"
+        - name: CLICKHOUSE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: clickhouse-secrets
+              key: password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: analytics-service  # Must match pod labels
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 4000

@@ -14,9 +14,9 @@ spec:
     spec:
       containers:
       - name: order-service
-        image: gcr.io/lugx-gaming-project/order-service:v1
+        image: gcr.io/lugx-gaming-project/order-service:v6
         ports:
-        - containerPort: 3000
+        - containerPort: 5000
         env:
         - name: NODE_ENV
           value: "production"

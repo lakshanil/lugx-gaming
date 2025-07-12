@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: analytics-ingress
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: "analytics-ip"
+    networking.gke.io/managed-certificates: "analytics-cert"
+spec:
+  rules:
+  - host: analytics.test.com
+    http:
+      paths:
+      - path: /*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: analytics-service
+            port:
+              number: 80

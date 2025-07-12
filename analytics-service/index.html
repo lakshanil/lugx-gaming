@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My App with Analytics</title>
+  <style>
+    #analytics-widget {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 1000;
+      font-family: Arial, sans-serif;
+      width: 250px;
+    }
+
+    #analytics-widget h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    #stats-container p {
+      margin: 4px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Page Content -->
+  <h1>Welcome to My App</h1>
+  <p>This page includes live analytics tracking.</p>
+
+  <!-- Analytics Widget -->
+  <div id="analytics-widget">
+    <h3>Live Stats</h3>
+    <div id="stats-container">
+      Loading analytics...
+    </div>
+  </div>
+
+<!-- ✅ Analytics Script -->
+<script>
+  const ANALYTICS_BASE_URL = 'http://34.123.155.72:30080';
+  const sessionId = 'session_' + Math.random().toString(36).substring(2, 15);
+  const sessionStartTime = Date.now();
+  let maxScrollDepth = 0;
+
+  // ✅ Track session start
+  trackEvent('session_start', { pageUrl: window.location.href });
+
+  // ✅ Track page view
+  trackEvent('page_view', { pageUrl: window.location.href });
+
+  // ✅ Track clicks
+  document.addEventListener('click', (e) => {
+    if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') {
+      trackEvent('click', {
+        element: e.target.tagName,
+        text: e.target.innerText.substring(0, 50)
+      });
+    }
+  });
+
+  // ✅ Track scroll depth
+  window.addEventListener('scroll', () => {
+    const scrolled = window.scrollY + window.innerHeight;
+    const totalHeight = document.documentElement.scrollHeight;
+    const scrollDepth = Math.round((scrolled / totalHeight) * 100);
+    if (scrollDepth > maxScrollDepth) {
+      maxScrollDepth = scrollDepth;
+    }
+  });
+
+  // ✅ Before unload: track page time and scroll depth
+  window.addEventListener('beforeunload', () => {
+    const timeOnPage = Math.round((Date.now() - sessionStartTime) / 1000);
+    trackEvent('page_time', { timeOnPage });
+    trackEvent('scroll_depth', { depth: maxScrollDepth });
+    trackEvent('session_end', { duration: timeOnPage });
+  });
+
+  // ✅ Main tracking function (using fetch for visibility)
+  function trackEvent(eventType, data = {}) {
+    console.log(`Sending ${eventType}`, data);
+    fetch(`${ANALYTICS_BASE_URL}/track`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        eventType,
+        sessionId,
+        pageUrl: window.location.href,
+        ...data
+      })
+    }).catch(err => console.error(`Error sending ${eventType}`, err));
+  }
+
+  // ✅ Analytics UI refresh
+  async function updateAnalytics() {
+    try {
+      const res = await fetch(`${ANALYTICS_BASE_URL}/api/analytics`);
+      const data = await res.json();
+      document.getElementById('stats-container').innerHTML = `
+        <p>Total Page Views: ${Object.values(data.pageViews).reduce((a, b) => a + b, 0)}</p>
+        <p>Active Sessions: ${data.totalSessions}</p>
+        <p>Top Page: ${data.topPages[0]?.[0] || 'N/A'} (${data.topPages[0]?.[1] || 0} views)</p>
+      `;
+    } catch (err) {
+      console.error('Analytics UI update failed', err);
+    }
+  }
+
+  // ✅ Start auto refresh
+  updateAnalytics();
+  setInterval(updateAnalytics, 5000);
+</script>
+
+  
+</body>
+</html>

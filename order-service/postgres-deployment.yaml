@@ -12,14 +12,19 @@ spec:
       labels:
         app: postgres
     spec:
+      initContainers:
+      - name: clean-data-dir
+        image: busybox
+        command: ["sh", "-c", "rm -rf /var/lib/postgresql/data/*"]
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
       containers:
       - name: postgres
         image: postgres:15
         env:
         - name: POSTGRES_PASSWORD
-          value: "password"
-        - name: POSTGRES_DB
-          value: "orders"
+          value: "1234"
         ports:
         - containerPort: 5432
         volumeMounts:

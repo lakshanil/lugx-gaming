@@ -172,45 +172,74 @@ https://templatemo.com/tm-589-lugx-gaming
 
   
   <script>
-// Track page views
-function trackPageView() {
-  const data = {
-    eventType: 'pageview',
-    pageUrl: window.location.pathname,
-    timestamp: new Date().toISOString()
-  };
-  
-  fetch('http://analytics-service:4000/track', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data)
+  const ANALYTICS_BASE_URL = 'http://34.123.155.72:30080';
+  const sessionId = 'session_' + Math.random().toString(36).substring(2, 15);
+  const sessionStartTime = Date.now();
+  let maxScrollDepth = 0;
+
+  // Track session start
+  trackEvent('session_start', {
+    pageUrl: window.location.href
   });
-}
 
-// Track scroll depth
-window.addEventListener('scroll', function() {
-  const scrollDepth = (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100;
-  
-  if (scrollDepth > 25 && scrollDepth <= 50) {
-    trackEvent('scroll', '25%');
-  } else if (scrollDepth > 50 && scrollDepth <= 75) {
-    trackEvent('scroll', '50%');
-  } else if (scrollDepth > 75) {
-    trackEvent('scroll', '75%');
+  // Track page view
+  trackEvent('page_view', {
+    pageUrl: window.location.href
+  });
+
+  // Track clicks
+  document.addEventListener('click', (e) => {
+    if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') {
+      trackEvent('click', {
+        element: e.target.tagName,
+        text: e.target.innerText.substring(0, 50)
+      });
+    }
+  });
+
+  // Track scroll depth
+  window.addEventListener('scroll', () => {
+    const scrolled = window.scrollY + window.innerHeight;
+    const totalHeight = document.documentElement.scrollHeight;
+    const depth = Math.min(100, Math.round((scrolled / totalHeight) * 100));
+    maxScrollDepth = Math.max(maxScrollDepth, depth);
+  });
+
+  // Track time on page and scroll depth before unload
+  window.addEventListener('beforeunload', () => {
+    const timeOnPage = (Date.now() - sessionStartTime) / 1000;
+    trackEvent('page_time', { timeOnPage });
+    trackEvent('scroll_depth', { depth: maxScrollDepth });
+    trackEvent('session_end', { duration: timeOnPage });
+  });
+
+  // Core tracking function
+  function trackEvent(eventType, data = {}) {
+    navigator.sendBeacon(`${ANALYTICS_BASE_URL}/track`, JSON.stringify({
+      eventType,
+      sessionId,
+      pageUrl: window.location.href,
+      ...data
+    }));
   }
-});
 
-// Track clicks
-document.addEventListener('click', function(e) {
-  if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') {
-    trackEvent('click', e.target.innerText || e.target.getAttribute('id'));
+  // Display analytics every 5 seconds
+  async function updateAnalytics() {
+    try {
+      const response = await fetch(`${ANALYTICS_BASE_URL}/api/analytics`);
+      const data = await response.json();
+      document.getElementById('stats-container').innerHTML = `
+        <p>Total Page Views: ${Object.values(data.pageViews).reduce((a, b) => a + b, 0)}</p>
+        <p>Active Sessions: ${data.totalSessions}</p>
+        <p>Top Page: ${data.topPages[0]?.[0] || 'N/A'} (${data.topPages[0]?.[1] || 0} views)</p>
+      `;
+    } catch (error) {
+      console.error('Analytics fetch error:', error);
+    }
   }
-});
 
-// Initialize tracking
-trackPageView();
+  updateAnalytics();
+  setInterval(updateAnalytics, 5000);
 </script>
 
   </body>

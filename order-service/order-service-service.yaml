@@ -3,9 +3,10 @@ kind: Service
 metadata:
   name: order-service
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: order-service
   ports:
-    - port: 3000
-      targetPort: 3000
+    - protocol: TCP 
+      port: 5000
+      targetPort: 5000
