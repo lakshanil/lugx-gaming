@@ -1,4 +1,10 @@
 steps:
+
+serviceAccount: "cloudbuild-deployer@lugx-gaming-project.iam.gserviceaccount.com"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  
   # Step 1: Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args: [
