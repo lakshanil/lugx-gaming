@@ -1,32 +1,22 @@
 const express = require('express');
 const { ClickHouse } = require('clickhouse');
-const cors = require('cors'); // Added for CORS support
+const cors = require('cors');
 const app = express();
-app.use(express.json());
-app.use(cors()); // Enable CORS for all routes
 
-// ✅ ClickHouse Client Setup
+app.use(express.json());
+app.use(cors());
+
+// ClickHouse Connection (FIXED: Removed duplicate http://)
 const clickhouse = new ClickHouse({
-  url: 'http://35.184.166.248',
+  host: '35.184.166.248',
   port: 8123,
-  debug: false,
-  basicAuth: null,
-  isUseGzip: false,
-  format: "json",  
-  raw: false,
-  config: {
-    database: 'analytics', // Specify database name
-    session_timeout: 60,
-  }
+  debug: true,
+  database: 'analytics' // Explicitly specify database
 });
 
-// Verify ClickHouse connection on startup
-async function verifyClickHouseConnection() {
+// Initialize database and table
+async function initDB() {
   try {
-    await clickhouse.query('SHOW DATABASES').toPromise();
-    console.log('✅ Connected to ClickHouse successfully');
-    
-    // Ensure database and table exist
     await clickhouse.query('CREATE DATABASE IF NOT EXISTS analytics').toPromise();
     await clickhouse.query(`
       CREATE TABLE IF NOT EXISTS analytics.analytics_events
@@ -43,87 +33,38 @@ async function verifyClickHouseConnection() {
       ENGINE = MergeTree()
       ORDER BY (timestamp, session_id)
     `).toPromise();
-    console.log('✅ Verified analytics_events table exists');
+    console.log('✅ Database initialized');
   } catch (err) {
-    console.error('❌ ClickHouse connection failed:', err);
-    process.exit(1);
+    console.error('❌ DB initialization failed:', err);
   }
 }
+initDB();
 
-verifyClickHouseConnection();
-
-// ✅ Health Check Endpoint
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
-});
-
-// ✅ Track Analytics Event
+// Tracking endpoint (FIXED: Simplified query)
 app.post('/track', async (req, res) => {
-  const {
-    eventType,
-    pageUrl,
-    sessionId,
-    element = '',
-    timeOnPage = 0,
-    depth = 0,
-    duration = 0
-  } = req.body || {};
-
-  if (!eventType || !pageUrl || !sessionId) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
-
-  const insertQuery = `
-    INSERT INTO analytics.analytics_events (
-      event_type, page_url, session_id, element,
-      time_on_page, scroll_depth, session_duration
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `;
+  const { eventType, pageUrl, sessionId, element, timeOnPage, depth, duration } = req.body;
 
   try {
-    await clickhouse.insert(insertQuery, [
-      eventType,
-      pageUrl,
-      sessionId,
-      element,
-      timeOnPage,
-      depth,
-      duration
-    ]).toPromise();
-
+    await clickhouse.insert(`
+      INSERT INTO analytics.analytics_events (
+        event_type, page_url, session_id, element, 
+        time_on_page, scroll_depth, session_duration
+      ) VALUES
+    `, [[
+      eventType, 
+      pageUrl, 
+      sessionId, 
+      element || '', 
+      parseFloat(timeOnPage) || 0, 
+      parseFloat(depth) || 0, 
+      parseFloat(duration) || 0
+    ]]).toPromise();
+    
     res.status(200).send('OK');
   } catch (err) {
-    console.error("❌ ClickHouse INSERT ERROR:", err);
-    res.status(500).send('Error writing to ClickHouse');
+    console.error('INSERT ERROR:', err);
+    res.status(500).send('Database error');
   }
 });
 
-// ✅ Analytics Summary
-app.get('/api/analytics', async (req, res) => {
-  try {
-    const result = await clickhouse.query(`
-      SELECT 
-        page_url, 
-        count(*) AS views,
-        avg(time_on_page) AS avg_time,
-        max(scroll_depth) AS avg_scroll_depth
-      FROM analytics.analytics_events
-      WHERE event_type = 'page_view'
-      GROUP BY page_url
-      ORDER BY views DESC
-      LIMIT 10
-    `).toPromise();
-
-    res.json({ topPages: result.data });
-  } catch (err) {
-    console.error("❌ Query Error:", err);
-    res.status(500).send('Error fetching analytics');
-  }
-});
-
-// ✅ Start Server
-const PORT = 4000;
-app.listen(PORT, () => {
-  console.log(`🚀 Analytics service running on port ${PORT}`);
-});
+app.listen(4000, () => console.log('🚀 Server running on port 4000'));

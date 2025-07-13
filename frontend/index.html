@@ -427,89 +427,61 @@ https://templatemo.com/tm-589-lugx-gaming
 
 
 
+
 <script>
-  // Configuration
-  const ANALYTICS_ENDPOINT = 'http://34.123.155.72:30080/track';
-  const sessionId = crypto.randomUUID() || 
-                   (Date.now().toString() + Math.random().toString(36).substring(2, 10));
-  const pageUrl = window.location.pathname + window.location.search; // Excludes hash
+// Configuration
+const ANALYTICS_ENDPOINT = 'http://34.123.155.72:30080/track';
+const sessionId = crypto.randomUUID() || Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
-  // Helper function for tracking
-  const trackEvent = (eventData) => {
-    const data = {
-      ...eventData,
-      pageUrl,
-      sessionId,
-      userAgent: navigator.userAgent,
-      screenWidth: window.screen.width,
-      screenHeight: window.screen.height,
-      timestamp: new Date().toISOString()
-    };
-
-    if (navigator.sendBeacon) {
-      const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
-      navigator.sendBeacon(ANALYTICS_ENDPOINT, blob);
-    } else {
-      fetch(ANALYTICS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-        keepalive: true  // Ensures request completes even if page unloads
-      }).catch(e => console.debug('Analytics error (non-critical):', e));
-    }
+// Unified tracking function
+const track = (data) => {
+  const payload = {
+    ...data,
+    pageUrl: window.location.pathname,
+    sessionId,
+    timestamp: new Date().toISOString()
   };
 
-  // 1. Session Start
-  trackEvent({ eventType: 'session_start' });
+  if (navigator.sendBeacon) {
+    const blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
+    navigator.sendBeacon(ANALYTICS_ENDPOINT, blob);
+  } else {
+    fetch(ANALYTICS_ENDPOINT, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+      keepalive: true
+    }).catch(e => console.log('Analytics error:', e));
+  }
+};
 
-  // 2. Page View
-  trackEvent({ eventType: 'page_view' });
+// Core tracking
+track({eventType: 'session_start'});
+track({eventType: 'page_view'});
 
-  // 3. Time on Page
-  let startTime = Date.now();
-  window.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-      trackEvent({
-        eventType: 'page_time',
-        timeOnPage: (Date.now() - startTime) / 1000
-      });
-    } else {
-      startTime = Date.now();
-    }
-  });
-
-  // 4. Scroll Depth (throttled)
-  let maxScroll = 0;
-  const scrollHandler = () => {
-    const scrollDepth = Math.floor(
-      (window.scrollY + window.innerHeight) / document.body.scrollHeight * 100
-    );
-    maxScroll = Math.max(maxScroll, scrollDepth);
-  };
-  window.addEventListener('scroll', scrollHandler, { passive: true });
-
-  // 5. Click Tracking (delegated)
-  document.addEventListener('click', (e) => {
-    const el = e.target;
-    const element = el.tagName.toLowerCase() + 
-                   (el.id ? `#${el.id}` : '') + 
-                   (el.className ? `.${el.className.split(' ')[0]}` : '');
-    trackEvent({
-      eventType: 'click',
-      element,
-      xPos: e.clientX,
-      yPos: e.clientY
+// Time tracking
+let pageEnterTime = Date.now();
+window.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    track({
+      eventType: 'page_exit',
+      timeOnPage: (Date.now() - pageEnterTime) / 1000
     });
-  }, { passive: true });
+  } else {
+    pageEnterTime = Date.now();
+  }
+});
 
-  // 6. Final events before unload
-  window.addEventListener('pagehide', () => {
-    trackEvent({
-      eventType: 'session_end',
-      duration: (Date.now() - startTime) / 1000,
-      scrollDepth: maxScroll
-    });
+// Click tracking (optimized)
+document.addEventListener('click', (e) => {
+  track({
+    eventType: 'click',
+    element: e.target.tagName.toLowerCase(),
+    x: e.clientX,
+    y: e.clientY
   });
+}, {passive: true});
 </script>
+
   </body>
 </html>

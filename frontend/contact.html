@@ -171,89 +171,59 @@ https://templatemo.com/tm-589-lugx-gaming
 
 
   
- <script>
-  const ANALYTICS_ENDPOINT = 'http://34.123.155.72:30080/track';
-  const sessionId = Date.now().toString() + Math.random().toString().slice(2);
-  const pageUrl = window.location.href;
+  <script>
+// Configuration
+const ANALYTICS_ENDPOINT = 'http://34.123.155.72:30080/track';
+const sessionId = crypto.randomUUID() || Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
-  // ✅ 1. Send page view
-  fetch(ANALYTICS_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      eventType: 'page_view',
-      pageUrl,
-      sessionId
-    })
-  });
+// Unified tracking function
+const track = (data) => {
+  const payload = {
+    ...data,
+    pageUrl: window.location.pathname,
+    sessionId,
+    timestamp: new Date().toISOString()
+  };
 
-  // ✅ 2. Track time on page
-  let startTime = Date.now();
-  window.addEventListener('beforeunload', () => {
-    const timeOnPage = (Date.now() - startTime) / 1000;
-    navigator.sendBeacon(ANALYTICS_ENDPOINT, JSON.stringify({
-      eventType: 'page_time',
-      pageUrl,
-      sessionId,
-      timeOnPage
-    }));
-  });
-
-  // ✅ 3. Scroll depth tracking
-  let maxScroll = 0;
-  window.addEventListener('scroll', () => {
-    const scrollDepth = Math.floor(
-      (window.scrollY + window.innerHeight) / document.body.scrollHeight * 100
-    );
-    maxScroll = Math.max(maxScroll, scrollDepth);
-  });
-
-  window.addEventListener('beforeunload', () => {
-    navigator.sendBeacon(ANALYTICS_ENDPOINT, JSON.stringify({
-      eventType: 'scroll_depth',
-      pageUrl,
-      sessionId,
-      depth: maxScroll
-    }));
-  });
-
-  // ✅ 4. Click tracking
-  document.addEventListener('click', (e) => {
-    const el = e.target;
-    const element = el.tagName + (el.id ? `#${el.id}` : '') + (el.className ? `.${el.className}` : '');
+  if (navigator.sendBeacon) {
+    const blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
+    navigator.sendBeacon(ANALYTICS_ENDPOINT, blob);
+  } else {
     fetch(ANALYTICS_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        eventType: 'click',
-        pageUrl,
-        sessionId,
-        element
-      })
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+      keepalive: true
+    }).catch(e => console.log('Analytics error:', e));
+  }
+};
+
+// Core tracking
+track({eventType: 'session_start'});
+track({eventType: 'page_view'});
+
+// Time tracking
+let pageEnterTime = Date.now();
+window.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    track({
+      eventType: 'page_exit',
+      timeOnPage: (Date.now() - pageEnterTime) / 1000
     });
-  });
+  } else {
+    pageEnterTime = Date.now();
+  }
+});
 
-  // ✅ 5. Session end
-  window.addEventListener('beforeunload', () => {
-    const duration = (Date.now() - startTime) / 1000;
-    navigator.sendBeacon(ANALYTICS_ENDPOINT, JSON.stringify({
-      eventType: 'session_end',
-      pageUrl,
-      sessionId,
-      duration
-    }));
+// Click tracking (optimized)
+document.addEventListener('click', (e) => {
+  track({
+    eventType: 'click',
+    element: e.target.tagName.toLowerCase(),
+    x: e.clientX,
+    y: e.clientY
   });
-
-  // ✅ 6. Session start
-  fetch(ANALYTICS_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      eventType: 'session_start',
-      pageUrl,
-      sessionId
-    })
-  });
+}, {passive: true});
 </script>
 
 
