@@ -1,40 +1,40 @@
 steps:
-  # Step 1: Build Docker image
+  # Build Docker image from frontend directory
   - name: 'gcr.io/cloud-builders/docker'
     args:
-      ['build', '-t', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA', 'frontend']
+      ['build', '-t', 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA', '-f', 'frontend/Dockerfile', 'frontend']
 
-  # Step 2: Push Docker image to GCR
+  # Push image to GCR
   - name: 'gcr.io/cloud-builders/docker'
     args:
-      ['push', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA']
+      ['push', 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA']
 
-  # Step 3: Replace placeholder with image in deployment YAML
+  # Process deployment YAML (this is the step that now works)
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
       - -c
       - |
-        sed "s|IMAGE_PLACEHOLDER|gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA|g" frontend-deployment.yaml > k8s-frontend-deployment.yaml
+        cd frontend
+        sed "s|IMAGE_PLACEHOLDER|gcr.io/$PROJECT_ID/frontend:$SHORT_SHA|g" frontend-deployment.yaml > k8s-frontend-deployment.yaml
 
-  # Step 4: Apply deployment YAML
+  # Apply deployment
   - name: 'gcr.io/cloud-builders/kubectl'
-    args: ['apply', '-f', 'k8s-frontend-deployment.yaml']
+    args: ['apply', '-f', 'frontend/k8s-frontend-deployment.yaml']
     env:
-      - CLOUDSDK_COMPUTE_ZONE=us-central1-c
-      - CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster
+      - 'CLOUDSDK_COMPUTE_ZONE=us-central1-c'
+      - 'CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster'
 
-  # Step 5: Apply service YAML
+  # Apply service
   - name: 'gcr.io/cloud-builders/kubectl'
-    args: ['apply', '-f', 'frontend-service.yaml']
+    args: ['apply', '-f', 'frontend/frontend-service.yaml']
     env:
-      - CLOUDSDK_COMPUTE_ZONE=us-central1-c
-      - CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster
+      - 'CLOUDSDK_COMPUTE_ZONE=us-central1-c'
+      - 'CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster'
 
 images:
-  - gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA
-
-serviceAccount: cloudbuild-deployer@lugx-gaming-project.iam.gserviceaccount.com
+  - 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA'
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  serviceAccount: 'cloudbuild-deployer@lugx-gaming-project.iam.gserviceaccount.com'

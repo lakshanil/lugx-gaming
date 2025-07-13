@@ -2,7 +2,7 @@ steps:
   # Step 1: Build Docker image from frontend-service directory
   - name: 'gcr.io/cloud-builders/docker'
     args:
-      ['build', '-t', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA', '-f', 'frontend/Dockerfile', 'frontend-service']
+      ['build', '-t', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA', '-f', 'frontend-service/Dockerfile', 'frontend-service']
 
   # Step 2: Push Docker image to GCR
   - name: 'gcr.io/cloud-builders/docker'
