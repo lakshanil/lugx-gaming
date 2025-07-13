@@ -1,46 +1,40 @@
 steps:
+  # Step 1: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      ['build', '-t', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA', '.']
 
-serviceAccount: "cloudbuild-deployer@lugx-gaming-project.iam.gserviceaccount.com"
+  # Step 2: Push Docker image to GCR
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      ['push', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA']
+
+  # Step 3: Replace placeholder with image in deployment YAML
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        sed "s|IMAGE_PLACEHOLDER|gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA|g" frontend-deployment.yaml > k8s-frontend-deployment.yaml
+
+  # Step 4: Apply deployment YAML
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args: ['apply', '-f', 'k8s-frontend-deployment.yaml']
+    env:
+      - CLOUDSDK_COMPUTE_ZONE=us-central1-c
+      - CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster
+
+  # Step 5: Apply service YAML
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args: ['apply', '-f', 'frontend-service.yaml']
+    env:
+      - CLOUDSDK_COMPUTE_ZONE=us-central1-c
+      - CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster
+
+images:
+  - gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA
+
+serviceAccount: cloudbuild-deployer@lugx-gaming-project.iam.gserviceaccount.com
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  
-  # Step 1: Build Docker image
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'build', '-t', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA', '.'
-    ]
-
-  # Step 2: Push Docker image to Google Container Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA']
-
-  # Step 3: Set image name in Kubernetes deployment file (using sed or kustomize)
-  - name: 'gcr.io/cloud-builders/gcloud'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        sed -i "s|IMAGE_PLACEHOLDER|gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA|g" frontend-deployment.yaml
-
-  # Step 4: Deploy to GKE using kubectl
-  - name: 'gcr.io/cloud-builders/kubectl'
-    args:
-      [
-        'apply', '-f', 'frontend-deployment.yaml'
-      ]
-    env:
-      - 'CLOUDSDK_COMPUTE_ZONE=us-central1-c'
-      - 'CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster'
-
-  - name: 'gcr.io/cloud-builders/kubectl'
-    args:
-      [
-        'apply', '-f', 'frontend-service.yaml'
-      ]
-    env:
-      - 'CLOUDSDK_COMPUTE_ZONE=us-central1-a'
-      - 'CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster'
-
-images:
-  - 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA'
