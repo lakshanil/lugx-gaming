@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: analytics
-        image: gcr.io/lugx-gaming-project/analytics-service:v17
+        image: gcr.io/lugx-gaming-project/analytics-service:v21
         ports:
         - containerPort: 4000
         resources:

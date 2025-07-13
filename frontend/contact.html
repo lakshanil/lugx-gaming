@@ -171,12 +171,10 @@ https://templatemo.com/tm-589-lugx-gaming
 
 
   
-  <script>
-// Configuration
+<script>
 const ANALYTICS_ENDPOINT = 'http://34.123.155.72:30080/track';
 const sessionId = crypto.randomUUID() || Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
-// Unified tracking function
 const track = (data) => {
   const payload = {
     ...data,
@@ -191,18 +189,16 @@ const track = (data) => {
   } else {
     fetch(ANALYTICS_ENDPOINT, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       keepalive: true
     }).catch(e => console.log('Analytics error:', e));
   }
 };
 
-// Core tracking
-track({eventType: 'session_start'});
-track({eventType: 'page_view'});
+track({ eventType: 'session_start' });
+track({ eventType: 'page_view' });
 
-// Time tracking
 let pageEnterTime = Date.now();
 window.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
@@ -215,7 +211,6 @@ window.addEventListener('visibilitychange', () => {
   }
 });
 
-// Click tracking (optimized)
 document.addEventListener('click', (e) => {
   track({
     eventType: 'click',
@@ -223,8 +218,9 @@ document.addEventListener('click', (e) => {
     x: e.clientX,
     y: e.clientY
   });
-}, {passive: true});
+}, { passive: true });
 </script>
+
 
 
   </body>
