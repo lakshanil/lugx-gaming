@@ -1,15 +1,20 @@
 steps:
-  # Build Docker image from frontend directory
+  # Step 1: Build Docker image from frontend directory
   - name: 'gcr.io/cloud-builders/docker'
     args:
-      ['build', '-t', 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA', '-f', 'frontend/Dockerfile', 'frontend']
+      [
+        'build',
+        '-t', 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA',
+        '-f', 'frontend/Dockerfile',
+        'frontend'
+      ]
 
-  # Push image to GCR
+  # Step 2: Push image to Google Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
-      ['push', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA']
+      ['push', 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA']
 
-  # Process deployment YAML (this is the step that now works)
+  # Step 3: Replace placeholder with actual image name in deployment YAML
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
@@ -18,14 +23,14 @@ steps:
         cd frontend
         sed "s|IMAGE_PLACEHOLDER|gcr.io/$PROJECT_ID/frontend:$SHORT_SHA|g" frontend-deployment.yaml > k8s-frontend-deployment.yaml
 
-  # Apply deployment
+  # Step 4: Apply the deployment to the Kubernetes cluster
   - name: 'gcr.io/cloud-builders/kubectl'
     args: ['apply', '-f', 'frontend/k8s-frontend-deployment.yaml']
     env:
       - 'CLOUDSDK_COMPUTE_ZONE=us-central1-c'
       - 'CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster'
 
-  # Apply service
+  # Step 5: Apply the service definition
   - name: 'gcr.io/cloud-builders/kubectl'
     args: ['apply', '-f', 'frontend/frontend-service.yaml']
     env:
@@ -37,4 +42,5 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  serviceAccount: 'cloudbuild-deployer@lugx-gaming-project.iam.gserviceaccount.com'
+
+serviceAccount: 'cloudbuild-deployer@lugx-gaming-project.iam.gserviceaccount.com'

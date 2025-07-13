@@ -1,40 +1,46 @@
 steps:
-  # Step 1: Build Docker image from frontend-service directory
+  # Step 1: Build Docker image from frontend directory
   - name: 'gcr.io/cloud-builders/docker'
     args:
-      ['build', '-t', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA', '-f', 'frontend-service/Dockerfile', 'frontend-service']
+      [
+        'build',
+        '-t', 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA',
+        '-f', 'frontend/Dockerfile',
+        'frontend'
+      ]
 
-  # Step 2: Push Docker image to GCR
+  # Step 2: Push image to Google Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
-      ['push', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA']
+      ['push', 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA']
 
-  # Step 3: Process deployment YAML
+  # Step 3: Replace placeholder with actual image name in deployment YAML
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
       - -c
       - |
-        cd frontend-service
-        sed "s|IMAGE_PLACEHOLDER|gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA|g" frontend-deployment.yaml > k8s-frontend-deployment.yaml
+        cd frontend
+        sed "s|IMAGE_PLACEHOLDER|gcr.io/$PROJECT_ID/frontend:$SHORT_SHA|g" frontend-deployment.yaml > k8s-frontend-deployment.yaml
 
-  # Step 4: Apply deployment YAML
+  # Step 4: Apply the deployment to the Kubernetes cluster
   - name: 'gcr.io/cloud-builders/kubectl'
-    args: ['apply', '-f', 'frontend-service/k8s-frontend-deployment.yaml']
+    args: ['apply', '-f', 'frontend/k8s-frontend-deployment.yaml']
     env:
       - 'CLOUDSDK_COMPUTE_ZONE=us-central1-c'
       - 'CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster'
 
-  # Step 5: Apply service YAML
+  # Step 5: Apply the service definition
   - name: 'gcr.io/cloud-builders/kubectl'
-    args: ['apply', '-f', 'frontend-service/frontend-service.yaml']
+    args: ['apply', '-f', 'frontend/frontend-service.yaml']
     env:
       - 'CLOUDSDK_COMPUTE_ZONE=us-central1-c'
       - 'CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster'
 
 images:
-  - 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA'
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  serviceAccount: 'cloudbuild-deployer@lugx-gaming-project.iam.gserviceaccount.com'
+
+serviceAccount: 'cloudbuild-deployer@lugx-gaming-project.iam.gserviceaccount.com'
