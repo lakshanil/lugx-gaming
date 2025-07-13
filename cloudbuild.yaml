@@ -9,12 +9,22 @@ steps:
         'frontend'
       ]
 
-  # Step 2: Push image to Google Container Registry
+  # Step 2: Push Docker image to Google Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
       ['push', 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA']
 
-  # Step 3: Replace placeholder with actual image name in deployment YAML
+  # Step 3: Debugging step - List files in frontend/ to confirm file is present
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "📁 Listing files in frontend/ directory:"
+        ls -al frontend
+        echo "✅ Done listing files"
+
+  # Step 4: Replace IMAGE_PLACEHOLDER with actual image path in deployment YAML
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
@@ -23,14 +33,14 @@ steps:
         cd frontend
         sed "s|IMAGE_PLACEHOLDER|gcr.io/$PROJECT_ID/frontend:$SHORT_SHA|g" frontend-deployment.yaml > k8s-frontend-deployment.yaml
 
-  # Step 4: Apply the deployment to the Kubernetes cluster
+  # Step 5: Apply the deployment YAML to the Kubernetes cluster
   - name: 'gcr.io/cloud-builders/kubectl'
     args: ['apply', '-f', 'frontend/k8s-frontend-deployment.yaml']
     env:
       - 'CLOUDSDK_COMPUTE_ZONE=us-central1-c'
       - 'CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster'
 
-  # Step 5: Apply the service definition
+  # Step 6: Apply the service definition to the cluster
   - name: 'gcr.io/cloud-builders/kubectl'
     args: ['apply', '-f', 'frontend/frontend-service.yaml']
     env:
