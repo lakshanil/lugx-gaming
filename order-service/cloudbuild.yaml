@@ -1,0 +1,38 @@
+steps:
+  # Step 1: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/order-service:$SHORT_SHA', '.']
+
+  # Step 2: Push Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/order-service:$SHORT_SHA']
+
+  # Step 3: Replace image tag in deployment file
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        sed "s|IMAGE_PLACEHOLDER|gcr.io/$PROJECT_ID/SERVICE_NAME:$SHORT_SHA|g" deployment.yaml > k8s-deployment.yaml
+
+  # Step 4: Deploy to GKE
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args: ['apply', '-f', 'k8s-deployment.yaml']
+    env:
+      - CLOUDSDK_COMPUTE_ZONE=us-central1-c
+      - CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster
+
+  # Optional: Apply service.yaml if needed
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args: ['apply', '-f', 'service.yaml']
+    env:
+      - CLOUDSDK_COMPUTE_ZONE=us-central1-c
+      - CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster
+
+images:
+  - gcr.io/$PROJECT_ID/SERVICE_NAME:$SHORT_SHA
+
+serviceAccount: cloudbuild-deployer@lugx-gaming-project.iam.gserviceaccount.com
+
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -1,4 +1,6 @@
 const express = require('express');
+const { ClickHouse } = require('clickhouse');
+
 const app = express();
 app.use(express.json());
 
@@ -9,7 +11,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ In-memory storage (simulated DB)
+// ✅ In-memory backup storage
 const analyticsData = {
   pageViews: {},
   clicks: [],
@@ -19,21 +21,29 @@ const analyticsData = {
   sessionDurations: []
 };
 
-// ✅ Track Events
-app.post('/track', (req, res) => {
-  const { eventType, pageUrl, sessionId, timeOnPage, depth, duration } = req.body;
+// ✅ ClickHouse client setup
+const clickhouse = new ClickHouse({
+  url: 'http://http://35.184.166.248:8123',
+  basicAuth: {
+    username: 'default',
+    password: ''
+  },
+  isUseGzip: false,
+  format: 'json'
+});
 
+// ✅ Track Event Endpoint
+app.post('/track', async (req, res) => {
+  const { eventType, pageUrl, sessionId, timeOnPage, depth, duration, element } = req.body;
+
+  // In-memory tracking
   switch (eventType) {
     case 'page_view':
       analyticsData.pageViews[pageUrl] = (analyticsData.pageViews[pageUrl] || 0) + 1;
       break;
 
     case 'click':
-      analyticsData.clicks.push({
-        pageUrl,
-        element: req.body.element,
-        timestamp: Date.now()
-      });
+      analyticsData.clicks.push({ pageUrl, element, timestamp: Date.now() });
       break;
 
     case 'session_start':
@@ -64,10 +74,28 @@ app.post('/track', (req, res) => {
       break;
   }
 
+  // Insert into ClickHouse
+  try {
+    await clickhouse.insert('INSERT INTO analytics_events FORMAT JSONEachRow', [
+      {
+        event_type: eventType,
+        page_url: pageUrl || '',
+        session_id: sessionId || '',
+        element: element || '',
+        time_on_page: timeOnPage || 0,
+        scroll_depth: depth || 0,
+        session_duration: duration || 0,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+  } catch (error) {
+    console.error('❌ ClickHouse insert failed:', error.message);
+  }
+
   res.status(200).send('OK');
 });
 
-// ✅ API to Fetch Analytics Summary
+// ✅ Summary API for UI or debugging
 app.get('/api/analytics', (req, res) => {
   const sessions = Object.values(analyticsData.sessions);
   const totalSessions = sessions.length;
@@ -98,7 +126,7 @@ app.get('/api/analytics', (req, res) => {
   });
 });
 
-// ✅ Healthcheck Endpoint
+// ✅ Healthcheck
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
@@ -106,5 +134,5 @@ app.get('/health', (req, res) => {
 // ✅ Start Server
 const PORT = 4000;
 app.listen(PORT, () => {
-  console.log(`Analytics service running on port ${PORT}`);
+  console.log(`🚀 Analytics service running on port ${PORT}`);
 });
