@@ -7,7 +7,7 @@ steps:
   # Push image to GCR
   - name: 'gcr.io/cloud-builders/docker'
     args:
-      ['push', 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA']
+      ['push', 'gcr.io/$PROJECT_ID/frontend-service:$SHORT_SHA']
 
   # Process deployment YAML (this is the step that now works)
   - name: 'gcr.io/cloud-builders/gcloud'
