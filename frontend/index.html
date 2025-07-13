@@ -428,90 +428,88 @@ https://templatemo.com/tm-589-lugx-gaming
 
 
 <script>
+  // Configuration
   const ANALYTICS_ENDPOINT = 'http://34.123.155.72:30080/track';
-  const sessionId = Date.now().toString() + Math.random().toString().slice(2);
-  const pageUrl = window.location.href;
+  const sessionId = crypto.randomUUID() || 
+                   (Date.now().toString() + Math.random().toString(36).substring(2, 10));
+  const pageUrl = window.location.pathname + window.location.search; // Excludes hash
 
-  // ✅ 1. Send page view
-  fetch(ANALYTICS_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      eventType: 'page_view',
-      pageUrl,
-      sessionId
-    })
-  });
-
-  // ✅ 2. Track time on page
-  let startTime = Date.now();
-  window.addEventListener('beforeunload', () => {
-    const timeOnPage = (Date.now() - startTime) / 1000;
-    navigator.sendBeacon(ANALYTICS_ENDPOINT, JSON.stringify({
-      eventType: 'page_time',
+  // Helper function for tracking
+  const trackEvent = (eventData) => {
+    const data = {
+      ...eventData,
       pageUrl,
       sessionId,
-      timeOnPage
-    }));
+      userAgent: navigator.userAgent,
+      screenWidth: window.screen.width,
+      screenHeight: window.screen.height,
+      timestamp: new Date().toISOString()
+    };
+
+    if (navigator.sendBeacon) {
+      const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+      navigator.sendBeacon(ANALYTICS_ENDPOINT, blob);
+    } else {
+      fetch(ANALYTICS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        keepalive: true  // Ensures request completes even if page unloads
+      }).catch(e => console.debug('Analytics error (non-critical):', e));
+    }
+  };
+
+  // 1. Session Start
+  trackEvent({ eventType: 'session_start' });
+
+  // 2. Page View
+  trackEvent({ eventType: 'page_view' });
+
+  // 3. Time on Page
+  let startTime = Date.now();
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      trackEvent({
+        eventType: 'page_time',
+        timeOnPage: (Date.now() - startTime) / 1000
+      });
+    } else {
+      startTime = Date.now();
+    }
   });
 
-  // ✅ 3. Scroll depth tracking
+  // 4. Scroll Depth (throttled)
   let maxScroll = 0;
-  window.addEventListener('scroll', () => {
+  const scrollHandler = () => {
     const scrollDepth = Math.floor(
       (window.scrollY + window.innerHeight) / document.body.scrollHeight * 100
     );
     maxScroll = Math.max(maxScroll, scrollDepth);
-  });
+  };
+  window.addEventListener('scroll', scrollHandler, { passive: true });
 
-  window.addEventListener('beforeunload', () => {
-    navigator.sendBeacon(ANALYTICS_ENDPOINT, JSON.stringify({
-      eventType: 'scroll_depth',
-      pageUrl,
-      sessionId,
-      depth: maxScroll
-    }));
-  });
-
-  // ✅ 4. Click tracking
+  // 5. Click Tracking (delegated)
   document.addEventListener('click', (e) => {
     const el = e.target;
-    const element = el.tagName + (el.id ? `#${el.id}` : '') + (el.className ? `.${el.className}` : '');
-    fetch(ANALYTICS_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        eventType: 'click',
-        pageUrl,
-        sessionId,
-        element
-      })
+    const element = el.tagName.toLowerCase() + 
+                   (el.id ? `#${el.id}` : '') + 
+                   (el.className ? `.${el.className.split(' ')[0]}` : '');
+    trackEvent({
+      eventType: 'click',
+      element,
+      xPos: e.clientX,
+      yPos: e.clientY
+    });
+  }, { passive: true });
+
+  // 6. Final events before unload
+  window.addEventListener('pagehide', () => {
+    trackEvent({
+      eventType: 'session_end',
+      duration: (Date.now() - startTime) / 1000,
+      scrollDepth: maxScroll
     });
   });
-
-  // ✅ 5. Session end
-  window.addEventListener('beforeunload', () => {
-    const duration = (Date.now() - startTime) / 1000;
-    navigator.sendBeacon(ANALYTICS_ENDPOINT, JSON.stringify({
-      eventType: 'session_end',
-      pageUrl,
-      sessionId,
-      duration
-    }));
-  });
-
-  // ✅ 6. Session start
-  fetch(ANALYTICS_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      eventType: 'session_start',
-      pageUrl,
-      sessionId
-    })
-  });
 </script>
-
-
   </body>
 </html>

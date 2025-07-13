@@ -1,134 +1,125 @@
 const express = require('express');
 const { ClickHouse } = require('clickhouse');
-
+const cors = require('cors'); // Added for CORS support
 const app = express();
 app.use(express.json());
+app.use(cors()); // Enable CORS for all routes
 
-// ✅ CORS Setup
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  next();
-});
-
-// ✅ In-memory backup storage
-const analyticsData = {
-  pageViews: {},
-  clicks: [],
-  sessions: {},
-  scrollDepths: [],
-  pageTimes: [],
-  sessionDurations: []
-};
-
-// ✅ ClickHouse client setup
+// ✅ ClickHouse Client Setup
 const clickhouse = new ClickHouse({
-  url: 'http://http://35.184.166.248:8123',
-  basicAuth: {
-    username: 'default',
-    password: ''
-  },
+  url: 'http://35.184.166.248',
+  port: 8123,
+  debug: false,
+  basicAuth: null,
   isUseGzip: false,
-  format: 'json'
+  format: "json",  
+  raw: false,
+  config: {
+    database: 'analytics', // Specify database name
+    session_timeout: 60,
+  }
 });
 
-// ✅ Track Event Endpoint
-app.post('/track', async (req, res) => {
-  const { eventType, pageUrl, sessionId, timeOnPage, depth, duration, element } = req.body;
-
-  // In-memory tracking
-  switch (eventType) {
-    case 'page_view':
-      analyticsData.pageViews[pageUrl] = (analyticsData.pageViews[pageUrl] || 0) + 1;
-      break;
-
-    case 'click':
-      analyticsData.clicks.push({ pageUrl, element, timestamp: Date.now() });
-      break;
-
-    case 'session_start':
-      analyticsData.sessions[sessionId] = {
-        start: Date.now(),
-        duration: 0,
-        pageTimes: [],
-        scrollDepths: []
-      };
-      break;
-
-    case 'page_time':
-      if (analyticsData.sessions[sessionId]) {
-        analyticsData.sessions[sessionId].pageTimes.push(timeOnPage);
-      }
-      break;
-
-    case 'scroll_depth':
-      if (analyticsData.sessions[sessionId]) {
-        analyticsData.sessions[sessionId].scrollDepths.push(depth);
-      }
-      break;
-
-    case 'session_end':
-      if (analyticsData.sessions[sessionId]) {
-        analyticsData.sessions[sessionId].duration = duration;
-      }
-      break;
-  }
-
-  // Insert into ClickHouse
+// Verify ClickHouse connection on startup
+async function verifyClickHouseConnection() {
   try {
-    await clickhouse.insert('INSERT INTO analytics_events FORMAT JSONEachRow', [
-      {
-        event_type: eventType,
-        page_url: pageUrl || '',
-        session_id: sessionId || '',
-        element: element || '',
-        time_on_page: timeOnPage || 0,
-        scroll_depth: depth || 0,
-        session_duration: duration || 0,
-        timestamp: new Date().toISOString()
-      }
-    ]);
-  } catch (error) {
-    console.error('❌ ClickHouse insert failed:', error.message);
+    await clickhouse.query('SHOW DATABASES').toPromise();
+    console.log('✅ Connected to ClickHouse successfully');
+    
+    // Ensure database and table exist
+    await clickhouse.query('CREATE DATABASE IF NOT EXISTS analytics').toPromise();
+    await clickhouse.query(`
+      CREATE TABLE IF NOT EXISTS analytics.analytics_events
+      (
+        event_type String,
+        page_url String,
+        session_id String,
+        element String,
+        time_on_page Float32,
+        scroll_depth Float32,
+        session_duration Float32,
+        timestamp DateTime DEFAULT now()
+      )
+      ENGINE = MergeTree()
+      ORDER BY (timestamp, session_id)
+    `).toPromise();
+    console.log('✅ Verified analytics_events table exists');
+  } catch (err) {
+    console.error('❌ ClickHouse connection failed:', err);
+    process.exit(1);
   }
+}
 
-  res.status(200).send('OK');
-});
+verifyClickHouseConnection();
 
-// ✅ Summary API for UI or debugging
-app.get('/api/analytics', (req, res) => {
-  const sessions = Object.values(analyticsData.sessions);
-  const totalSessions = sessions.length;
-
-  const averageSessionDuration = totalSessions > 0
-    ? sessions.reduce((sum, s) => sum + (s.duration || 0), 0) / totalSessions
-    : 0;
-
-  const allPageTimes = sessions.flatMap(s => s.pageTimes || []);
-  const averagePageTime = allPageTimes.length > 0
-    ? allPageTimes.reduce((a, b) => a + b, 0) / allPageTimes.length
-    : 0;
-
-  const allScrolls = sessions.flatMap(s => s.scrollDepths || []);
-  const averageScrollDepth = allScrolls.length > 0
-    ? allScrolls.reduce((a, b) => a + b, 0) / allScrolls.length
-    : 0;
-
-  res.json({
-    pageViews: analyticsData.pageViews,
-    topPages: Object.entries(analyticsData.pageViews)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10),
-    totalSessions,
-    averageSessionDuration: averageSessionDuration.toFixed(2),
-    averagePageTime: averagePageTime.toFixed(2),
-    averageScrollDepth: averageScrollDepth.toFixed(2)
-  });
-});
-
-// ✅ Healthcheck
+// ✅ Health Check Endpoint
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
+});
+
+// ✅ Track Analytics Event
+app.post('/track', async (req, res) => {
+  const {
+    eventType,
+    pageUrl,
+    sessionId,
+    element = '',
+    timeOnPage = 0,
+    depth = 0,
+    duration = 0
+  } = req.body || {};
+
+  if (!eventType || !pageUrl || !sessionId) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const insertQuery = `
+    INSERT INTO analytics.analytics_events (
+      event_type, page_url, session_id, element,
+      time_on_page, scroll_depth, session_duration
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  try {
+    await clickhouse.insert(insertQuery, [
+      eventType,
+      pageUrl,
+      sessionId,
+      element,
+      timeOnPage,
+      depth,
+      duration
+    ]).toPromise();
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error("❌ ClickHouse INSERT ERROR:", err);
+    res.status(500).send('Error writing to ClickHouse');
+  }
+});
+
+// ✅ Analytics Summary
+app.get('/api/analytics', async (req, res) => {
+  try {
+    const result = await clickhouse.query(`
+      SELECT 
+        page_url, 
+        count(*) AS views,
+        avg(time_on_page) AS avg_time,
+        max(scroll_depth) AS avg_scroll_depth
+      FROM analytics.analytics_events
+      WHERE event_type = 'page_view'
+      GROUP BY page_url
+      ORDER BY views DESC
+      LIMIT 10
+    `).toPromise();
+
+    res.json({ topPages: result.data });
+  } catch (err) {
+    console.error("❌ Query Error:", err);
+    res.status(500).send('Error fetching analytics');
+  }
 });
 
 // ✅ Start Server
