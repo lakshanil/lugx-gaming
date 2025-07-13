@@ -37,14 +37,14 @@ steps:
   - name: 'gcr.io/cloud-builders/kubectl'
     args: ['apply', '-f', 'frontend/k8s-frontend-deployment.yaml']
     env:
-      - 'CLOUDSDK_COMPUTE_ZONE=us-central1-c'
+      - 'CLOUDSDK_COMPUTE_ZONE=us-central1-a'
       - 'CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster'
 
   # Step 6: Apply the service definition to the cluster
   - name: 'gcr.io/cloud-builders/kubectl'
     args: ['apply', '-f', 'frontend/frontend-service.yaml']
     env:
-      - 'CLOUDSDK_COMPUTE_ZONE=us-central1-c'
+      - 'CLOUDSDK_COMPUTE_ZONE=us-central1-a'
       - 'CLOUDSDK_CONTAINER_CLUSTER=lugx-cluster'
 
 images:
