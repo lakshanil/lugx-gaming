@@ -31,7 +31,6 @@ steps:
     args:
       - -c
       - |
-        cd frontend
         sed "s|IMAGE_PLACEHOLDER|gcr.io/$PROJECT_ID/frontend:$SHORT_SHA|g" frontend-deployment.yaml > k8s-frontend-deployment.yaml
 
   # Step 5: Apply the deployment YAML to the Kubernetes cluster
