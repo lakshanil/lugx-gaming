@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: analytics
-        image: gcr.io/lugx-gaming-project/analytics-service:v21
+        image: gcr.io/lugx-gaming-project/analytics-service:v22
         ports:
         - containerPort: 4000
         resources:
@@ -33,20 +33,20 @@ spec:
         env:
         - name: NODE_ENV
           value: "production"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 4000
-          initialDelaySeconds: 15
-          periodSeconds: 20
-          timeoutSeconds: 3
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 4000
-          initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 3
-          successThreshold: 1
-          failureThreshold: 3
+          # livenessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: 4000
+          #   initialDelaySeconds: 15
+          #   periodSeconds: 20
+          #   timeoutSeconds: 3
+          #   failureThreshold: 3
+          # readinessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: 4000
+          #   initialDelaySeconds: 5
+          #   periodSeconds: 10
+          #   timeoutSeconds: 3
+          #   successThreshold: 1
+          #   failureThreshold: 3
